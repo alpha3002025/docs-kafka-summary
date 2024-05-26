@@ -101,9 +101,15 @@ RabbitMQ 와 같은 메시지 큐 시스템에서 사용되는 컨슈머 애플�
 
 
 
-## 파티션
+## Partition, Leader Partition, RF, ISR
+
+### Partition
 
 파티션은 토픽을 여러개로 나누었을 때 나누어진 개별 영역을 파티션이라고 합니다.<br/>
+
+하나의 토픽은 여러개의 파티션으로 분리될 수 있습니다. 파티션은 데이터가 저장될 위치를 의미합니다. 즉, 데이터에 대해 파티셔닝 알고리즘을 적용해서 특정 파티션으로만 데이터가 전달될 수 있도록 파티션의 위치를 지정해주는 것을 파티셔닝이라고 합니다.<br/>
+
+파티션이 많으면 성능은 향상되지만 절대적이지는 않습니다. 브로커 성능에는 한계가 있기 때문입니다.<br/>
 
 파티션은 프로듀서가 보내는 메시지의 메시지 키 값에 의해 파티션이 선택됩니다. 이 메시지 키 값을 지정하지 않고 메시지를 전송할 경우 내부적으로 라운드 로빈 방식으로 파티션을 선택해서 데이터를 전송하게 됩니다.<br/>
 
@@ -123,11 +129,85 @@ RabbitMQ 와 같은 메시지 큐 시스템에서 사용되는 컨슈머 애플�
 
 <br/>
 
+
+
+### RF (Replication Factor)
+
+하나의 파티션은 1개 이상의 복제본 (Replica) 을 가질 수 있습니다. RF (Replication Factor) 는 복제본의 갯수를 의미합니다. RF가 1보다 크면 클수록 가용성(Availability)이 높아진다고 할 수 있습니다. 물론, 이때 브로커 갯수가 충분해야 합니다.<br/>
+
+RF 가 너무 크면 저장공간이 낭비된다는 단점이 있습니다. Produce 시에도 지연시간이 길어집니다. 복제해줘야 하는 노드가 많아지기 때문입니다.<br/>
+
+일반적으로 Replica 의 갯수는 Broker 의 갯수보다 적은 것이 권장됩니다. 그래야 안정적이고 성능 부하가 없습니다.<br/>
+
+
+
+아래의 그림들을 참고해주시기 바랍니다.
+
+![](https://cdn.educba.com/academy/wp-content/uploads/2021/05/Kafka-Replication-Factor-2-1.png.webp)
+
+
+
+> 출처 : https://www.educba.com/kafka-replication-factor/
+
+<br/>
+
+
+
+![](https://miro.medium.com/v2/resize:fit:828/format:webp/1*Sza0NeMLKrNFNC245mLzWw.jpeg)
+
+> 출처 : https://medium.com/@_amanarora/replication-in-kafka-58b39e91b64e
+
+<br/>
+
+
+
+### ISR (In-Sync Replica)
+
+Replica 중 Sync 를 맞출 Replica 의 그룹을 ISR (In-Sync Replica) 그룹이라고 이야기합니다.<br/>
+
+Partition 의 복제본이 많아지면 가용성(Availability)가 늘어납니다. 그리고 'Produce' 시에도 복제해야 할 데이터가 늘어납니다. 이렇게 되면 Produce 시의 지연 시간이 길어질 수 있다는 단점이 생깁니다.<br/>
+
+<br/>
+
+
+
+ISR 그룹에 많은 파티션을 포함하고 있으면
+
+- Produce 신뢰성/가용성 향상
+- but, 지연시간 증가
+
+ISR 그룹에 적은 파티션을 포함하고 있으면
+
+- Produce 신뢰성/가용성 하락
+- but, 지연시간 감소
+
+<br/>
+
+
+
+"적절하게 토픽에 Produce 되었다"
+
+- → "토픽 내의 파티션들의 모든 ISR 그룹에 복제가 잘 이뤄졌다."
+
+<br/>
+
+
+
+Produce 가 되었다는 의미에는 꼭 ISR 그룹에 복제하는 작업도 모두 완료되었다는 의미가 내포되어 있다는 사실을 기억해야 합니다.<br/>
+
+<br/>
+
+
+
 ### Leader Partition
 
-> TODO : 헐 이것도 빠뜨렸었네. 정리 예정
+복제된 Partition 들 중 하나는 Leader 로 선출됩니다. 기본적으로 Producer 는 Leader 파티션이 포함된 Broker 에 메시지를 전송합니다. 이후 broker 는 나머지 Partition 들에 메시지를 복제합니다.<br/>
 
+Consumer 역시 Leader Partition 이 포함되어 있는 Broker 로부터 데이터를 읽습니다. <br/>
 
+> 카프카 2.4 부터는 leader 가 아닌 가장 가까운 broker 로부터 데이터를 읽도록 설정하는 것이 가능해졌습니다.
+
+<br/>
 
 
 
@@ -149,9 +229,22 @@ RabbitMQ 와 같은 메시지 큐 시스템에서 사용되는 컨슈머 애플�
 
 
 
-### Producer Acknowledgement (ACK)
+### Producer Acknowledgement (Acks)
 
-> TODO: 이거 빠뜨렸었네 헐...
+acks = 0
+
+- Producer 가 메시지를 보낼 때 Ack 를 기다리지 않고 보내는 방식입니다.
+- 데이터가 손실될 수 있습니다.
+
+acks = 1
+
+- Leader Replica 에 데이터가 전달되면 Ack 를 반환하는 방식입니다.
+- 일반적으로 현업에서는 Ack = 1 을 많이 쓴다고 합니다. 팔로워 들에게 복제가 안됐을 가능성이 있다고 생각을 할 수 도 있지만, 결과적으로는 카프카 내에서 내부적인 가정으로 복제를 해낸다는 가정으로 설정합니다.
+
+acks = all
+
+- Leader + 모든 ISR 에 데이터가 복제가 되면 Ack 를 반환합니다.
+- 가장 안전한 방식이지만, 성능상에 이슈가 존재합니다.
 
 <br/>
 
@@ -344,77 +437,11 @@ LAG 이 발생하는 경우에 대한 문제점은 파티션의 범위를 크게
 
 > 위에서 한번 정리했지만, 이번에는 RF, ISR 을 설명하기 위해 간단하게 요약해봅니다.
 
-하나의 토픽은 여러개의 파티션으로 분리될 수 있습니다. 파티션은 데이터가 저장될 위치를 의미합니다. 즉, 데이터에 대해 파티셔닝 알고리즘을 적용해서 특정 파티션으로만 데이터가 전달될 수 있도록 파티션의 위치를 지정해주는 것을 파티셔닝이라고 합니다.<br/>
-
-파티션이 많으면 성능은 향상되지만 절대적이지는 않습니다. 브로커 성능에는 한계가 있기 때문입니다.<br/>
 
 
 
-### RF (Replication Factor)
-
-하나의 파티션은 1개 이상의 복제본 (Replica) 을 가질 수 있습니다. RF (Replication Factor) 는 복제본의 갯수를 의미합니다. RF가 1보다 크면 클수록 가용성(Availability)이 높아진다고 할 수 있습니다. 물론, 이때 브로커 갯수가 충분해야 합니다.<br/>
-
-RF 가 너무 크면 저장공간이 낭비된다는 단점이 있습니다. Produce 시에도 지연시간이 길어집니다. 복제해줘야 하는 노드가 많아지기 때문입니다.<br/>
-
-일반적으로 Replica 의 갯수는 Broker 의 갯수보다 적은 것이 권장됩니다. 그래야 안정적이고 성능 부하가 없습니다.<br/>
 
 
-
-아래의 그림들을 참고해주시기 바랍니다.
-
-![](https://cdn.educba.com/academy/wp-content/uploads/2021/05/Kafka-Replication-Factor-2-1.png.webp)
-
-
-
-> 출처 : https://www.educba.com/kafka-replication-factor/
-
-<br/>
-
-
-
-![](https://miro.medium.com/v2/resize:fit:828/format:webp/1*Sza0NeMLKrNFNC245mLzWw.jpeg)
-
-> 출처 : https://medium.com/@_amanarora/replication-in-kafka-58b39e91b64e
-
-<br/>
-
-
-
-### ISR (In-Sync Replica)
-
-Replica 중 Sync 를 맞출 Replica 의 그룹을 ISR (In-Sync Replica) 그룹이라고 이야기합니다.<br/>
-
-Partition 의 복제본이 많아지면 가용성(Availability)가 늘어납니다. 그리고 'Produce' 시에도 복제해야 할 데이터가 늘어납니다. 이렇게 되면 Produce 시의 지연 시간이 길어질 수 있다는 단점이 생깁니다.<br/>
-
-<br/>
-
-
-
-ISR 그룹에 많은 파티션을 포함하고 있으면
-
-- Produce 신뢰성/가용성 향상
-- but, 지연시간 증가
-
-ISR 그룹에 적은 파티션을 포함하고 있으면
-
-- Produce 신뢰성/가용성 하락
-- but, 지연시간 감소
-
-<br/>
-
-
-
-"적절하게 토픽에 Produce 되었다"
-
-- → "토픽 내의 파티션들의 모든 ISR 그룹에 복제가 잘 이뤄졌다."
-
-<br/>
-
-
-
-Produce 가 되었다는 의미에는 꼭 ISR 그룹에 복제하는 작업도 모두 완료되었다는 의미가 내포되어 있다는 사실을 기억해야 합니다.<br/>
-
-<br/>
 
 
 
