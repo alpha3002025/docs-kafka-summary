@@ -4,6 +4,7 @@
   "kafka-cli-examples": "Kafka CLI",
   "kafka-java-examples": "카프카 Java 예제",
   "kafka-multi-module-example": "Kafka 멀티모듈 예제",
+  "stream-processing-example-1": "스트림 프로세싱 예제 (1)",
   "contact": {
     "title": "Contact ↗",
     "type": "page",
